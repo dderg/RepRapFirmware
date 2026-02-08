@@ -113,7 +113,58 @@ void Move::SetAxisMinimum(size_t axis, float value, bool byProbing) noexcept
 GCodeResult Move::ConfigureBacklashCompensation(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	bool seen = false;
-	size_t totalAxes = reprap.GetGCodes().GetTotalAxes();
+	const size_t totalAxes = reprap.GetGCodes().GetTotalAxes();
+
+	if (gb.Seen('P'))
+	{
+		const unsigned int pVal = gb.GetLimitedUIValue('P', 2);		// P0 or P1
+		if (pVal == 1)
+		{
+			// P1: configure reverse-after-travel mode per axis
+			bool axisSeen = false;
+			for (size_t i = 0; i < totalAxes; ++i)
+			{
+				if (gb.Seen(reprap.GetGCodes().GetAxisLetters()[i]))
+				{
+					axisSeen = true;
+					if (gb.GetUIValue() != 0)
+					{
+						reverseBacklashAxes.SetBit(i);
+					}
+					else
+					{
+						reverseBacklashAxes.ClearBit(i);
+						pendingReverseBacklashSteps[i] = 0;			// clear any pending compensation
+					}
+				}
+			}
+			if (axisSeen)
+			{
+				reprap.MoveUpdated();
+			}
+			else
+			{
+				// Report reverse-after-travel settings
+				reply.copy("Reverse-after-travel backlash compensation axes:");
+				bool any = false;
+				for (size_t i = 0; i < totalAxes; ++i)
+				{
+					if (reverseBacklashAxes.IsBitSet(i))
+					{
+						reply.catf(" %c", reprap.GetGCodes().GetAxisLetters()[i]);
+						any = true;
+					}
+				}
+				if (!any)
+				{
+					reply.cat(" none");
+				}
+			}
+			return GCodeResult::ok;
+		}
+		// P0 falls through to standard backlash configuration below
+	}
+
 	for (size_t i = 0; i < totalAxes; ++i)
 	{
 		if (gb.Seen(reprap.GetGCodes().GetAxisLetters()[i]))
@@ -142,6 +193,21 @@ GCodeResult Move::ConfigureBacklashCompensation(GCodeBuffer& gb, const StringRef
 			reply.catf(" %c: %.3f", reprap.GetGCodes().GetAxisLetters()[i], (double)backlashMm[i]);
 		}
 		reply.catf(", correction distance multiplier %" PRIu32, backlashCorrectionDistanceFactor);
+		// Include reverse-after-travel status in report
+		reply.cat(", reverse-after-travel:");
+		bool any = false;
+		for (size_t i = 0; i < totalAxes; ++i)
+		{
+			if (reverseBacklashAxes.IsBitSet(i))
+			{
+				reply.catf(" %c", reprap.GetGCodes().GetAxisLetters()[i]);
+				any = true;
+			}
+		}
+		if (!any)
+		{
+			reply.cat(" none");
+		}
 	}
 	return GCodeResult::ok;
 }

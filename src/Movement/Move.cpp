@@ -384,9 +384,11 @@ void Move::Init() noexcept
 		backlashMm[axis] = 0.0;
 		backlashSteps[axis] = 0;
 		targetBacklashSteps[axis] = currentBacklashSteps[axis] = 0;
+		pendingReverseBacklashSteps[axis] = 0;
 	}
 
 	backlashCorrectionDistanceFactor = DefaultBacklashCorrectionDistanceFactor;
+	reverseBacklashAxes.Clear();
 
 	// We use different defaults for the Z axis
 	maxFeedrates[Z_AXIS] = ConvertSpeedFromMmPerSec(DefaultZMaxFeedrate);

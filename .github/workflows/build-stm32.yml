@@ -1,0 +1,110 @@
+name: Build STM32 firmware
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - '**backlash**'
+
+jobs:
+  build-scylla:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Install ARM GCC toolchain
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y gcc-arm-none-eabi
+
+      - name: Clone RRFBuild
+        uses: actions/checkout@v4
+        with:
+          repository: gloomyandy/RRFBuild
+          ref: v3.6-dev
+          path: RRFBuild
+
+      - name: Clone RepRapFirmware (this branch)
+        uses: actions/checkout@v4
+        with:
+          path: RRFBuild/RepRapFirmware
+
+      - name: Clone CoreN2G
+        uses: actions/checkout@v4
+        with:
+          repository: gloomyandy/CoreN2G
+          ref: v3.6.1
+          path: RRFBuild/CoreN2G
+          submodules: recursive
+
+      - name: Clone RRFLibraries
+        uses: actions/checkout@v4
+        with:
+          repository: gloomyandy/RRFLibraries
+          ref: v3.6.1
+          path: RRFBuild/RRFLibraries
+
+      - name: Clone CANlib
+        uses: actions/checkout@v4
+        with:
+          repository: gloomyandy/CANlib
+          ref: v3.6.1
+          path: RRFBuild/CANlib
+
+      - name: Clone FreeRTOS
+        uses: actions/checkout@v4
+        with:
+          repository: gloomyandy/FreeRTOS
+          ref: v3.6.1
+          path: RRFBuild/FreeRTOS
+
+      - name: Clone Duet3Expansion
+        uses: actions/checkout@v4
+        with:
+          repository: gloomyandy/Duet3Expansion
+          ref: v3.6.1
+          path: RRFBuild/Duet3Expansion
+
+      - name: Clone IAP
+        uses: actions/checkout@v4
+        with:
+          repository: gloomyandy/IAP
+          ref: v3.6.1
+          path: RRFBuild/IAP
+
+      - name: Clone WiFiSocketServerRTOS
+        uses: actions/checkout@v4
+        with:
+          repository: gloomyandy/WiFiSocketServerRTOS
+          ref: v2.2.1
+          path: RRFBuild/WiFiSocketServerRTOS
+
+      - name: Fix case-sensitive paths for Linux
+        working-directory: RRFBuild
+        run: |
+          ln -s SBC RepRapFirmware/src/Sbc
+
+      - name: Remove unsupported linker flag
+        working-directory: RRFBuild
+        run: |
+          sed -i 's/-Wl,--no-warn-rwx-segment //' RepRapFirmware/makefiles/STM32H7/makefile
+
+      - name: Build base STM32H723 firmware
+        working-directory: RRFBuild
+        run: |
+          make distclean MCU=STM32H7
+          make -j$(nproc) firmware CORE=STM32 MCU=STM32H7 NETWORK=COMBINED BUILD=Debug VARIANT=STM32H723 OUTPUT_NAME=base_stm32h723
+
+      - name: Build Scylla board firmware
+        working-directory: RRFBuild
+        run: |
+          cp build/base_stm32h723.bin build/firmware_scylla1_0_h723.bin
+          cp build/base_stm32h723.map build/firmware_scylla1_0_h723.map
+          chmod +x RepRapFirmware/Tools/CrcAppender/linux-x86_64/CrcAppender
+          RepRapFirmware/Tools/CrcAppender/linux-x86_64/CrcAppender build/firmware_scylla1_0_h723.bin boards/btt/scylla1_0_h723
+
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-scylla
+          path: |
+            RRFBuild/build/firmware_scylla1_0_h723.bin
+            RRFBuild/build/firmware_scylla1_0_h723.map

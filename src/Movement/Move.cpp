@@ -3226,11 +3226,20 @@ int32_t Move::ApplyBacklashCompensation(size_t drive, int32_t delta) noexcept
 		if (originalDelta >= 0)		// only apply when NOT continuing in the negative direction
 		{
 			delta += pendingReverse;
-			// Update direction tracking to reflect the reverse compensation direction
+			// Update direction and backlash tracking: the reverse comp takes the place of
+			// standard backlash comp for this direction change, so we must update targetSteps
+			// and currentSteps to keep GetLiveMachineCoordinates in sync
 			const bool reverseIsBackwards = (pendingReverse < 0);
 			if (reverseIsBackwards != lastDirections.IsBitSet(drive))
 			{
 				lastDirections.InvertBit(drive);
+				int32_t temp = (int32_t)backlashSteps[drive];
+				if (reverseIsBackwards)
+				{
+					temp = -temp;
+				}
+				targetBacklashSteps[drive] += temp;
+				currentBacklashSteps[drive] += temp;
 			}
 		}
 		pendingReverse = 0;			// always clear; will be re-set below if another negative move

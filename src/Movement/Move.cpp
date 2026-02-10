@@ -3223,20 +3223,21 @@ int32_t Move::ApplyBacklashCompensation(size_t drive, int32_t delta) noexcept
 	int32_t& pendingReverse = pendingReverseBacklashSteps[drive];
 	if (pendingReverse != 0)
 	{
-		delta += pendingReverse;
-		// Update direction tracking to reflect the reverse compensation direction
-		const bool reverseIsBackwards = (pendingReverse < 0);
-		if (reverseIsBackwards != lastDirections.IsBitSet(drive))
+		if (originalDelta >= 0)		// only apply when NOT continuing in the negative direction
 		{
-			lastDirections.InvertBit(drive);
+			delta += pendingReverse;
+			// Update direction tracking to reflect the reverse compensation direction
+			const bool reverseIsBackwards = (pendingReverse < 0);
+			if (reverseIsBackwards != lastDirections.IsBitSet(drive))
+			{
+				lastDirections.InvertBit(drive);
+			}
 		}
-		pendingReverse = 0;
+		pendingReverse = 0;			// always clear; will be re-set below if another negative move
 	}
 
 	// If this drive has changed direction, update the backlash correction steps due
-	// Use originalDelta for direction when there is commanded movement, so that reverse compensation
-	// doesn't mask the true direction (e.g. consecutive down moves where reverse cancels the delta)
-	const bool backwards = (originalDelta != 0) ? (originalDelta < 0) : (delta < 0);
+	const bool backwards = (delta < 0);
 	int32_t& targetSteps = targetBacklashSteps[drive];
 	if (backwards != lastDirections.IsBitSet(drive))
 	{

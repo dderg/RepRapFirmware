@@ -3234,7 +3234,9 @@ int32_t Move::ApplyBacklashCompensation(size_t drive, int32_t delta) noexcept
 	}
 
 	// If this drive has changed direction, update the backlash correction steps due
-	const bool backwards = (delta < 0);
+	// Use originalDelta for direction when there is commanded movement, so that reverse compensation
+	// doesn't mask the true direction (e.g. consecutive down moves where reverse cancels the delta)
+	const bool backwards = (originalDelta != 0) ? (originalDelta < 0) : (delta < 0);
 	int32_t& targetSteps = targetBacklashSteps[drive];
 	if (backwards != lastDirections.IsBitSet(drive))
 	{

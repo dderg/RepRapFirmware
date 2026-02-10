@@ -184,6 +184,7 @@ public:
 	int32_t ApplyBacklashCompensation(size_t drive, int32_t delta) noexcept;
 	uint32_t GetBacklashCorrectionDistanceFactor() const noexcept { return backlashCorrectionDistanceFactor; }
 	int32_t GetCurrentBacklashSteps(size_t drive) const noexcept { return currentBacklashSteps[drive]; }
+	bool HasPendingReverseBacklash(size_t drive) const noexcept { return pendingReverseBacklashSteps[drive] != 0; }
 
 	inline AxesBitmap GetLinearAxes() const noexcept { return linearAxes; }
 	inline AxesBitmap GetRotationalAxes() const noexcept { return rotationalAxes; }
@@ -735,6 +736,8 @@ private:
 	int32_t targetBacklashSteps[MaxAxes];					// how many backlash compensation microsteps we need for each axis
 	int32_t currentBacklashSteps[MaxAxes];					// how many backlash compensation microsteps have already been done for each axis
 	LogicalDrivesBitmap lastDirections;						// each bit is set if the corresponding axes motor last moved backwards
+	AxesBitmap reverseBacklashAxes;							// axes that use reverse-after-travel backlash compensation
+	int32_t pendingReverseBacklashSteps[MaxAxes];			// pending reverse backlash steps to apply on next move
 
 #if SUPPORT_NONLINEAR_EXTRUSION
 	NonlinearExtrusion nonlinearExtrusion[MaxExtruders];	// nonlinear extrusion coefficients

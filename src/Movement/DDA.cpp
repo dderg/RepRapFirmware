@@ -1121,7 +1121,7 @@ void DDA::Prepare(DDARing& ring, uint32_t prepareAdvanceTime, SimulationMode sim
 				{
 					// It's a linear axis
 					int32_t delta = endPoint[drive] - prev->endPoint[drive];
-					if (delta != 0)
+					if (delta != 0 || move.HasPendingReverseBacklash(drive))
 					{
 						move.EnableDrivers(drive, false);
 						if (flags.continuousRotationShortcut && reprap.GetMove().GetKinematics().IsContinuousRotationAxis(drive))
@@ -1140,23 +1140,26 @@ void DDA::Prepare(DDARing& ring, uint32_t prepareAdvanceTime, SimulationMode sim
 
 						delta = move.ApplyBacklashCompensation(drive, delta);
 
-						// We generate segments even for nonlocal drivers so that the final position is correct and to track the position in near real time
-						move.AddLinearSegments(drive, afterPrepare.moveStartTime, params, (motioncalc_t)delta, segFlags);
-						afterPrepare.drivesMoving.SetBit(drive);
+						if (delta != 0)		// delta may have become zero if reverse and standard compensation cancelled out
+						{
+							// We generate segments even for nonlocal drivers so that the final position is correct and to track the position in near real time
+							move.AddLinearSegments(drive, afterPrepare.moveStartTime, params, (motioncalc_t)delta, segFlags);
+							afterPrepare.drivesMoving.SetBit(drive);
 
 #if SUPPORT_CAN_EXPANSION
-						const AxisDriversConfig& config = move.GetAxisDriversConfig(drive);
-						for (size_t i = 0; i < config.numDrivers; ++i)
-						{
-							const DriverId driver = config.driverNumbers[i];
-							if (driver.IsRemote())
+							const AxisDriversConfig& config = move.GetAxisDriversConfig(drive);
+							for (size_t i = 0; i < config.numDrivers; ++i)
 							{
-								CanMotion::AddAxisMovement(params, driver, delta);
+								const DriverId driver = config.driverNumbers[i];
+								if (driver.IsRemote())
+								{
+									CanMotion::AddAxisMovement(params, driver, delta);
+								}
 							}
-						}
 #endif
-						axisMotorsEnabled.SetBit(drive);
-						additionalAxisMotorsToEnable |= reprap.GetMove().GetKinematics().GetControllingDrives(drive, flags.checkEndstops);
+							axisMotorsEnabled.SetBit(drive);
+							additionalAxisMotorsToEnable |= reprap.GetMove().GetKinematics().GetControllingDrives(drive, flags.checkEndstops);
+						}
 					}
 				}
 				else

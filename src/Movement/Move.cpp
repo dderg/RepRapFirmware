@@ -384,9 +384,11 @@ void Move::Init() noexcept
 		backlashMm[axis] = 0.0;
 		backlashSteps[axis] = 0;
 		targetBacklashSteps[axis] = currentBacklashSteps[axis] = 0;
+		pendingReverseBacklashSteps[axis] = 0;
 	}
 
 	backlashCorrectionDistanceFactor = DefaultBacklashCorrectionDistanceFactor;
+	reverseBacklashAxes.Clear();
 
 	// We use different defaults for the Z axis
 	maxFeedrates[Z_AXIS] = ConvertSpeedFromMmPerSec(DefaultZMaxFeedrate);
@@ -3215,6 +3217,34 @@ void Move::UpdateBacklashSteps() noexcept
 // Given the number of microsteps that an axis has been asked to move, return the number that it should actually move
 int32_t Move::ApplyBacklashCompensation(size_t drive, int32_t delta) noexcept
 {
+	const int32_t originalDelta = delta;
+
+	// Apply pending reverse backlash compensation from previous move
+	int32_t& pendingReverse = pendingReverseBacklashSteps[drive];
+	if (pendingReverse != 0)
+	{
+		if (originalDelta >= 0)		// only apply when NOT continuing in the negative direction
+		{
+			delta += pendingReverse;
+			// Update direction and backlash tracking: the reverse comp takes the place of
+			// standard backlash comp for this direction change, so we must update targetSteps
+			// and currentSteps to keep GetLiveMachineCoordinates in sync
+			const bool reverseIsBackwards = (pendingReverse < 0);
+			if (reverseIsBackwards != lastDirections.IsBitSet(drive))
+			{
+				lastDirections.InvertBit(drive);
+				int32_t temp = (int32_t)backlashSteps[drive];
+				if (reverseIsBackwards)
+				{
+					temp = -temp;
+				}
+				targetBacklashSteps[drive] += temp;
+				currentBacklashSteps[drive] += temp;
+			}
+		}
+		pendingReverse = 0;			// always clear; will be re-set below if another negative move
+	}
+
 	// If this drive has changed direction, update the backlash correction steps due
 	const bool backwards = (delta < 0);
 	int32_t& targetSteps = targetBacklashSteps[drive];
@@ -3248,6 +3278,13 @@ int32_t Move::ApplyBacklashCompensation(size_t drive, int32_t delta) noexcept
 			delta += stepsToDo;
 		}
 	}
+
+	// Set up reverse compensation for next move if this axis has reverse mode and moved in the negative direction
+	if (reverseBacklashAxes.IsBitSet(drive) && originalDelta < 0)
+	{
+		pendingReverse = (int32_t)backlashSteps[drive];			// positive = reverse of the downward travel
+	}
+
 	return delta;
 }
 
